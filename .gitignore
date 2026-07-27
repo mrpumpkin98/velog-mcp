@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.env.local
+
+# 토큰·브라우저 프로필 (VELOG_TOKEN_STORE 를 프로젝트 안으로 지정한 경우 대비)
+.velog-mcp/
+tokens.json
+dist/
+build/
+*.egg-info/
+.DS_Store
+.pytest_cache/

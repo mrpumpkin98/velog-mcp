@@ -1,0 +1,39 @@
+[project]
+name = "velog-mcp"
+version = "0.1.0"
+description = "벨로그(velog) 글 발행·수정을 MCP 도구로 노출하는 서버 / MCP server for publishing and updating velog posts"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+keywords = ["mcp", "velog", "blog", "markdown", "publishing"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Processing :: Markup :: Markdown",
+]
+dependencies = [
+    "mcp[cli]>=1.28.1",
+    "httpx>=0.28.1",
+    "python-frontmatter>=1.3.0",
+]
+
+[project.urls]
+Repository = "https://github.com/mrpumpkin98/velog-mcp"
+
+[project.optional-dependencies]
+# 브라우저 로그인(velog_login 도구 / scripts/login.py)에만 필요하다.
+# 토큰을 직접 넣어 쓰는 경우에는 설치하지 않아도 된다.
+login = ["playwright>=1.48"]
+
+[project.scripts]
+velog-mcp = "velog_mcp.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/velog_mcp"]
