@@ -1,8 +1,24 @@
 # 동작 방식
 
-← [README](../README.md)
+← [README](../README.md) · [레퍼런스](reference.md)
 
 왜 이렇게 만들었는지, 그리고 어디가 깨질 수 있는지에 대한 기록.
+
+## 전체 구성
+
+서버는 클라이언트와 stdio로 말하고, 벨로그와는 쿠키를 실은 HTTPS로 말합니다. 토큰은 홈 디렉터리의 파일에, 글 id는 마크다운 파일에 남습니다.
+
+```mermaid
+flowchart LR
+    U["사용자"] -->|"이 문서 올려줘"| C["MCP 클라이언트<br/>Cursor · Claude Desktop"]
+    C <-->|"stdio"| S["velog-mcp 서버"]
+    S <-->|"파일 읽기 · 글 id 기록"| M["로컬 .md 파일"]
+    S <-->|"토큰 읽기 · 갱신 저장"| T["~/.velog-mcp/tokens.json"]
+    S -->|"HTTPS + 쿠키"| V["velog 내부 GraphQL<br/>v2.velog.io/graphql"]
+    S -.->|"velog_login 때만"| B["Chromium 창"]
+    B -->|"사용자가 직접 인증"| V
+    B -.->|"쿠키 추출"| T
+```
 
 ## 왜 아이디·비밀번호를 안 받나
 
@@ -15,47 +31,113 @@
 
 즉 로그인 수단은 **이메일 매직링크 또는 소셜 OAuth**뿐입니다. 그래서 자격증명을 저장하는 대신, 브라우저에서 한 번 로그인해 쿠키를 받아두고 그 뒤로는 토큰만 관리하는 방식을 택했습니다.
 
+```mermaid
+sequenceDiagram
+    participant U as 사용자
+    participant A as 에이전트
+    participant S as velog-mcp
+    participant B as Chromium
+    participant V as 벨로그
+
+    U->>A: "벨로그 로그인해줘"
+    A->>S: velog_login
+    S->>B: 창 열기 (프로필 재사용)
+    B->>V: 이메일 링크 또는 소셜 OAuth
+    V-->>B: access_token · refresh_token 쿠키
+    B-->>S: 쿠키 추출
+    S->>S: tokens.json 에 0600 으로 저장
+    S-->>A: 로그인된 계정
+    A-->>U: "@계정으로 로그인됐습니다"
+```
+
+두 번째부터는 브라우저 프로필(`~/.velog-mcp/browser`)이 남아 있어 사람이 손댈 일이 없고, `headless=True`로 부르면 창도 뜨지 않습니다.
+
 ## 토큰이 관리되는 방식
 
-인증은 `access_token`·`refresh_token` 쿠키로 합니다. `access_token`이 만료되면 벨로그가 `refresh_token`을 보고 새 토큰을 `Set-Cookie`로 내려주는데, 이 서버는 응답 헤더에서 그것을 붙잡아 저장소에 반영합니다. 그래서 평소에는 아무것도 하지 않아도 갱신됩니다.
+인증은 `access_token`·`refresh_token` 쿠키로 합니다. `access_token`이 만료되면 벨로그가 `refresh_token`을 보고 새 토큰을 `Set-Cookie`로 내려주는데, 서버는 응답 헤더에서 그것을 붙잡아 저장소에 반영합니다. 그래서 평소에는 아무것도 하지 않아도 갱신됩니다.
 
-| 상황 | 해야 할 일 |
-| --- | --- |
-| 처음 설치 | `velog_login` 한 번 (브라우저에서 인증) |
-| `access_token` 만료 | 없음 — 자동 갱신 |
-| `refresh_token` 만료 | `velog_login` 다시 (`headless=True`면 창도 안 뜸) |
+```mermaid
+stateDiagram-v2
+    state "토큰 없음" as none
+    state "유효" as ok
+    state "access 만료" as expired
 
-토큰은 `~/.velog-mcp/tokens.json`에 `0600` 권한으로, 임시 파일에 쓴 뒤 교체하는 방식으로 저장합니다. 브라우저 프로필은 `~/.velog-mcp/browser`에 남으므로 두 번째 로그인부터는 사람이 손댈 일이 없습니다.
+    [*] --> none
+    none --> ok: velog_login
+    ok --> expired: 시간 경과
+    expired --> ok: Set-Cookie 흡수 — 자동
+    expired --> none: refresh 까지 만료
+    none --> ok: velog_login 다시
+```
 
-**단, `Set-Cookie` 회전은 실서버에서 아직 확인되지 않았습니다.** 회전 처리 로직은 로컬 가짜 서버로 5가지 시나리오를 검증했지만(`scripts/verify_token_rotation.py`), 벨로그가 실제로 어떤 조건에서 새 토큰을 내려주는지는 유효한 토큰으로 만료를 겪어봐야 알 수 있습니다. 갱신이 안 되는 것 같으면 `velog_whoami`의 `token_source`를 보고 `scripts/login.py --headless`로 갱신하세요.
+손이 가는 시점은 처음 한 번과, `refresh_token`까지 만료된 경우뿐입니다.
+
+토큰은 `~/.velog-mcp/tokens.json`에 임시 파일로 쓴 뒤 교체하는 방식으로 저장하고, 권한은 `0600`으로 둡니다. 저장에 실패해도 요청 자체는 실패시키지 않고 그 프로세스에서는 메모리 값으로 계속 씁니다.
+
+**단, `Set-Cookie` 회전은 실서버에서 아직 확인되지 않았습니다.** 처리 로직은 로컬 가짜 서버로 5가지 시나리오를 검증했지만(`scripts/verify_token_rotation.py`), 벨로그가 실제로 어떤 조건에서 새 토큰을 내려주는지는 유효한 토큰으로 만료를 겪어봐야 알 수 있습니다. 갱신이 안 되는 것 같으면 `velog_whoami`의 `token_source`를 보고 `scripts/login.py --headless`로 갱신하세요.
+
+## 요청 한 건이 처리되는 과정
+
+회전 흡수와 오류 판정이 모두 이 경로에 모여 있습니다. 흡수한 토큰으로 **그 요청을 재시도하지는 않고**, 다음 요청부터 새 토큰이 실려 나갑니다.
+
+```mermaid
+sequenceDiagram
+    participant S as 서버 client.py
+    participant V as 벨로그 GraphQL
+
+    S->>V: POST /graphql<br/>Cookie 에 access_token 과 refresh_token
+    V-->>S: 응답 (만료였다면 Set-Cookie 에 새 토큰)
+    S->>S: Set-Cookie 흡수 → 메모리 + tokens.json
+
+    alt errors 에 not logged in / unauthorized
+        S->>S: 인증 오류로 변환
+    else 쓰기인데 data.writePost 가 null
+        S->>S: 인증 오류로 변환 (성공으로 넘기지 않음)
+    else 정상
+        S->>S: data 반환
+    end
+```
+
+세 번째 분기가 중요합니다. 벨로그는 **미인증 상태에서 `writePost`를 호출해도 GraphQL 에러 없이 `null`만 돌려줍니다.** 그대로 두면 "발행 성공인데 결과가 없다"로 보이므로, 쓰기 결과가 비어 있으면 인증 오류로 바꿔서 알려줍니다.
 
 ## 스키마를 어떻게 알아냈나
 
-벨로그의 GraphQL은 **introspection이 막혀 있습니다.** 스키마를 물어보면 `GRAPHQL_VALIDATION_FAILED`가 돌아옵니다. 그래서 일부러 틀린 타입·이름으로 요청을 보내고 검증 에러 메시지를 읽어(예: `Expected type String, found 1.`) 인자 이름과 타입을 하나씩 역추적해 확정했습니다. 그 근거는 `src/velog_mcp/graphql.py` 상단 주석에 남겨두었습니다.
+벨로그의 GraphQL은 **introspection이 막혀 있습니다.** 스키마를 물어보면 `GRAPHQL_VALIDATION_FAILED`가 돌아옵니다. 그래서 일부러 틀린 타입·이름으로 요청을 보내고 검증 에러 메시지를 읽어(예: `Expected type String, found 1.`) 인자 이름과 타입을 하나씩 역추적해 확정했습니다.
 
-따라서 **벨로그가 스키마를 바꾸면 도구가 깨집니다.** 그때 가장 먼저 볼 파일도 거기입니다.
+```mermaid
+flowchart LR
+    A["introspection 시도"] --> B["GRAPHQL_VALIDATION_FAILED"]
+    B --> C["일부러 틀린 타입·이름으로 요청"]
+    C --> D["검증 에러 메시지 해석<br/>Expected type String, found 1."]
+    D --> E["인자 이름·타입 확정"]
+    E --> F["graphql.py 상단에 근거 기록"]
+```
 
-또 하나 알아둘 함정은, 벨로그가 **미인증 상태에서 `writePost`를 호출해도 GraphQL 에러 없이 `null`만 돌려준다**는 점입니다. 그대로 두면 "발행 성공"으로 보이므로, 이 서버는 쓰기 결과가 비어 있으면 인증 오류로 바꿔서 알려줍니다.
+따라서 **벨로그가 스키마를 바꾸면 도구가 깨집니다.** 그때 가장 먼저 볼 파일도 `src/velog_mcp/graphql.py`입니다.
 
 ## 코드 구조
 
+```mermaid
+flowchart TD
+    server["server.py<br/>도구 10개 · 입력 검증 · 가드"]
+    markdown["markdown.py<br/>프런트매터 · H1 승격 · id 기록"]
+    client["client.py<br/>GraphQL 호출 · 회전 흡수 · 에러 변환"]
+    graphql["graphql.py<br/>쿼리 · 뮤테이션 · 실측 기록"]
+    login["browser_login.py<br/>브라우저 로그인"]
+    config["config.py<br/>환경변수 + 저장소 병합"]
+    store["token_store.py<br/>원자적 쓰기 0600"]
+
+    server --> markdown
+    server --> client
+    server --> login
+    server --> config
+    client --> graphql
+    client --> store
+    config --> store
+    login --> store
 ```
-src/velog_mcp/
-  server.py        도구 10개 정의 — 입력 검증·가드·응답 정리
-  client.py        GraphQL 호출, 쿠키 인증, Set-Cookie 회전 흡수, 에러 변환
-  graphql.py       쿼리·뮤테이션 문서 (+ 실측한 스키마 기록)
-  markdown.py      프런트매터 파싱, H1 제목 승격, 발행 후 id 기록
-  browser_login.py 브라우저 로그인 (MCP 도구·CLI가 함께 사용)
-  token_store.py   토큰 파일 원자적 쓰기 (0600)
-  config.py        환경변수 + 저장소 병합
-scripts/
-  doctor.py        설치 점검 + 다음 할 일 안내
-  login.py         터미널에서 브라우저 로그인
-  smoke_test.py    MCP 프로토콜로 조회 도구 검증
-  dry_run_markdown.py      마크다운 발행 로직 검증
-  verify_token_rotation.py 토큰 자동 갱신 검증
-  verify_mcp_config.py     클라이언트 설정으로 연결 검증
-```
+
+`scripts/` 아래에는 설치 점검(`doctor.py`), 터미널 로그인(`login.py`), 그리고 글을 만들지 않는 검증 스크립트 4개가 있습니다. 자세한 목록은 [레퍼런스](reference.md#스크립트)에 있습니다.
 
 ## 기여
 
