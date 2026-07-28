@@ -4,7 +4,7 @@
 
 로컬 마크다운 파일을 [벨로그](https://velog.io)에 발행합니다. 발행하면 파일에 글 id가 적히고, **같은 파일을 다시 올리면 새 글이 생기는 대신 그 글이 수정됩니다.** Cursor·Claude Desktop 등 MCP 클라이언트에 그대로 붙습니다.
 
-> ⚠️ 벨로그 공식 API가 아닙니다. 웹 클라이언트가 쓰는 내부 GraphQL을 호출하므로 벨로그가 스키마를 바꾸면 깨질 수 있습니다.
+> ⚠️ **벨로그와 무관한 개인 프로젝트입니다.** 공식 API가 아니라 웹 클라이언트가 쓰는 GraphQL을 그대로 호출하므로, 벨로그가 스키마를 바꾸면 깨질 수 있습니다.
 
 <sub>An MCP server for publishing local Markdown files to velog with idempotent updates. Docs are in Korean since velog is a Korean platform.</sub>
 
@@ -120,6 +120,7 @@ velog_url: https://velog.io/@your-id/transaction-boundary
 - **이미지는 업로드하지 않습니다.** 본문 이미지는 이미 접근 가능한 URL이어야 합니다.
 - **삭제는 되돌릴 수 없습니다.** `confirm` 없이는 실행되지 않게 막아뒀습니다.
 - **첫 발행은 임시저장으로.** 코드블록·표가 의도대로 나오는지 보고 공개하세요.
+- **자기 계정, 자기 글에만 쓰세요.** 대량 발행이나 자동 생성 글 양산에 쓰지 마세요. 벨로그는 개인이 운영비를 대는 서비스입니다. 호출도 사람이 글을 쓰는 속도를 넘지 않게 해주세요.
 
 문제가 생기면 `scripts/doctor.py` → [문제 해결](docs/reference.md#문제-해결) 순서로 보세요.
 
@@ -130,6 +131,10 @@ velog_url: https://velog.io/@your-id/transaction-boundary
 - **[레퍼런스](docs/reference.md)** — 프런트매터·환경변수 전체 목록, 검증 스크립트, 문제 해결
 - **[동작 방식](docs/how-it-works.md)** — 인증을 이렇게 만든 이유, 토큰 자동 갱신, 스키마를 알아낸 방법, 코드 구조
 
-## 라이선스
+## 라이선스와 고지
 
-MIT — [LICENSE](LICENSE). 이 프로젝트는 벨로그와 아무 관계가 없으며 공식 지원을 받지 않습니다.
+이 프로젝트는 MIT 라이선스입니다 — [LICENSE](LICENSE).
+
+**벨로그와 아무 관계가 없습니다.** 벨로그 운영사의 제휴·후원·승인·지원을 받지 않은 개인 프로젝트이며, 문제가 생겨도 벨로그에 문의하지 마세요. `velog`·`벨로그`는 각 권리자의 상표이고, 이 프로젝트는 어떤 도구인지 가리키기 위해 이름을 쓸 뿐입니다. 권리자가 요청하면 이름을 바꾸겠습니다.
+
+벨로그 본체도 MIT 오픈소스입니다([velog-io/velog](https://github.com/velog-io/velog)). 이 서버가 호출하는 쓰기 스키마도 그 저장소에 공개돼 있습니다 — [스키마를 어떻게 알아냈나](docs/how-it-works.md#스키마를-어떻게-알아냈나)

@@ -92,17 +92,19 @@ sequenceDiagram
     alt errors 에 not logged in / unauthorized
         S->>S: 인증 오류로 변환
     else 쓰기인데 data.writePost 가 null
-        S->>S: 인증 오류로 변환 (성공으로 넘기지 않음)
+        S->>S: 실패로 변환 (성공으로 넘기지 않음)
     else 정상
         S->>S: data 반환
     end
 ```
 
-세 번째 분기가 중요합니다. 벨로그는 **미인증 상태에서 `writePost`를 호출해도 GraphQL 에러 없이 `null`만 돌려줍니다.** 그대로 두면 "발행 성공인데 결과가 없다"로 보이므로, 쓰기 결과가 비어 있으면 인증 오류로 바꿔서 알려줍니다.
+세 번째 분기가 중요합니다. 벨로그는 **`writePost`가 실패해도 GraphQL 에러 없이 `null`만 돌려줍니다.** 그대로 두면 "발행 성공인데 결과가 없다"로 보이므로, 쓰기 결과가 비어 있으면 실패로 바꿔서 알려줍니다.
+
+원인은 하나가 아닙니다. 토큰 만료 말고도 **필수 인자 누락**(아래 `meta` 참고)과 벨로그의 일시적 거부가 실측됐습니다. 그래서 원인을 단정하지 않고 후보를 함께 알립니다. 예전에는 "토큰 만료"로 단정했는데, 실제 원인이 `meta` 누락이었을 때 진단을 엉뚱한 곳으로 끌고 갔습니다.
 
 ## 스키마를 어떻게 알아냈나
 
-벨로그의 GraphQL은 **introspection이 막혀 있습니다.** 스키마를 물어보면 `GRAPHQL_VALIDATION_FAILED`가 돌아옵니다. 그래서 일부러 틀린 타입·이름으로 요청을 보내고 검증 에러 메시지를 읽어(예: `Expected type String, found 1.`) 인자 이름과 타입을 하나씩 역추적해 확정했습니다.
+이 서버가 붙는 `https://v2.velog.io/graphql`은 **introspection이 막혀 있습니다.** 스키마를 물어보면 `GRAPHQL_VALIDATION_FAILED`가 돌아옵니다. 그래서 일부러 틀린 타입·이름으로 요청을 보내고 검증 에러 메시지를 읽어(예: `Expected type String, found 1.`) 인자 이름과 타입을 하나씩 역추적해 확정했습니다.
 
 ```mermaid
 flowchart LR
@@ -138,6 +140,14 @@ flowchart LR
 ```
 
 글은 저장되는데 응답만 깨지는 **부분 실패**입니다. 그래서 두 가지로 방어합니다. 쓰기 응답에서는 이 필드를 아예 요청하지 않고(`WRITE_RESULT_FIELDS`), `errors`가 있어도 `data`에 결과가 있으면 경고만 남기고 결과를 씁니다. 부분 실패를 예외로 만들면 글은 만들어졌는데 id를 잃어버려 **다음 실행이 중복 글을 만듭니다.** 조회 쿼리에서는 이 필드가 정상 동작하므로 그대로 씁니다.
+
+### 공개된 스키마로 교차 검증하기
+
+역추적이 유일한 방법은 아닙니다. 벨로그는 **MIT 라이선스 오픈소스**라서([velog-io/velog](https://github.com/velog-io/velog)), 쓰기 뮤테이션 스키마가 [`apps/server/src/graphql/Post.gql`](https://github.com/velog-io/velog/blob/main/apps/server/src/graphql/Post.gql)에 공개돼 있습니다. 차세대 엔드포인트인 `https://v3.velog.io/graphql`도 introspection이 열려 있어 인증 없이 스키마를 받아올 수 있습니다.
+
+다만 **그대로 옮겨 쓸 수는 없습니다.** v3는 인자를 `writePost(input: WritePostInput!)`처럼 객체로 묶는데, 이 서버가 붙는 v2는 `writePost(title: ..., body: ...)`처럼 펼쳐서 받습니다. 그래서 공개 스키마는 필드 이름과 타입을 확인하는 **참고 자료**로 씁니다.
+
+앞의 `meta` 문제도 이렇게 뒷받침됩니다. v3 스키마에서 이 필드는 `meta: JSON!`, 즉 **널을 허용하지 않는 필수 인자**로 선언돼 있습니다. 실측 결과와 맞아떨어집니다.
 
 ## 코드 구조
 
