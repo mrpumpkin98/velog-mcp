@@ -115,6 +115,30 @@ flowchart LR
 
 따라서 **벨로그가 스키마를 바꾸면 도구가 깨집니다.** 그때 가장 먼저 볼 파일도 `src/velog_mcp/graphql.py`입니다.
 
+### 에러 메시지로 알 수 없었던 두 가지
+
+에러 메시지만으로는 드러나지 않아, **로그인된 브라우저로 벨로그 에디터의 요청을 캡처해 비교**하고 변수를 하나씩 바꿔가며 찾아낸 것들입니다. 둘 다 인증 문제로 착각하기 쉽습니다.
+
+**`meta`는 반드시 객체로 보내야 합니다.** 빼거나 `null`로 보내면 GraphQL 에러 없이 `data.writePost = null`만 돌아옵니다.
+
+| 보낸 값 | 결과 |
+| --- | --- |
+| `meta` 인자 없음 | `null` |
+| `meta: null` | `null` |
+| `meta: {}` | 성공 |
+
+**쓰기 뮤테이션 응답에서 `short_description`을 요청하면 안 됩니다.** 벨로그가 이 필드를 만들다 서버에서 터집니다.
+
+```json
+{
+  "errors": [{ "message": "Cannot read properties of undefined (reading 'replace')",
+               "path": ["editPost", "short_description"] }],
+  "data": { "editPost": { "id": "...", "url_slug": "..." } }
+}
+```
+
+글은 저장되는데 응답만 깨지는 **부분 실패**입니다. 그래서 두 가지로 방어합니다. 쓰기 응답에서는 이 필드를 아예 요청하지 않고(`WRITE_RESULT_FIELDS`), `errors`가 있어도 `data`에 결과가 있으면 경고만 남기고 결과를 씁니다. 부분 실패를 예외로 만들면 글은 만들어졌는데 id를 잃어버려 **다음 실행이 중복 글을 만듭니다.** 조회 쿼리에서는 이 필드가 정상 동작하므로 그대로 씁니다.
+
 ## 코드 구조
 
 ```mermaid

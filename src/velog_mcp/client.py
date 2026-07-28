@@ -138,6 +138,16 @@ class VelogClient:
             )
             if _looks_like_auth_error(message):
                 raise VelogAuthError(f"{operation}: 인증에 실패했습니다 — {message}")
+
+            # 필드 리졸버 하나만 터진 부분 실패는 살린다. 벨로그는 글을 저장한 뒤에도
+            # 특정 필드를 만들다 에러를 내는 경우가 있는데, 이걸 실패로 처리하면
+            # 글은 만들어졌는데 id 를 잃어버려 다음 실행이 중복 글을 만든다.
+            partial = body.get("data") or {}
+            if any(value for value in partial.values()):
+                logger.warning(
+                    "%s: 일부 필드에서 오류가 있었지만 결과는 받았습니다 — %s", operation, message
+                )
+                return partial
             raise VelogError(f"{operation}: {message}")
 
         data = body.get("data")
@@ -224,16 +234,23 @@ class VelogClient:
 
 
 def _require_write_result(result: Any, operation: str) -> dict[str, Any]:
-    """쓰기 뮤테이션의 null 결과를 인증 오류로 변환한다.
+    """쓰기 뮤테이션의 null 결과를 명시적인 실패로 바꾼다.
 
-    벨로그는 미인증 상태에서 writePost·editPost 를 호출해도 GraphQL errors 없이
-    data.writePost = null 만 돌려준다. 그대로 넘기면 '성공했는데 결과가 없다'로 보이므로
-    여기서 명시적인 인증 오류로 바꾼다.
+    벨로그는 writePost·editPost 가 실패해도 GraphQL errors 없이 data 값만 null 로
+    돌려준다. 그대로 넘기면 '성공했는데 결과가 없다'로 보이므로 여기서 예외로 바꾼다.
+
+    원인은 하나가 아니다. 실측된 경우만 세 가지다.
+        - 토큰 만료·미인증
+        - meta 인자 누락 (graphql.py 주석 참고)
+        - 벨로그의 일시적 거부 (같은 요청이 잠시 뒤 성공)
+    그래서 원인을 단정하지 않고 후보를 함께 알린다. 예전에는 '토큰 만료'로 단정했는데,
+    실제 원인이 meta 누락이었을 때 진단을 엉뚱한 곳으로 끌고 갔다.
     """
     if not result:
         raise VelogAuthError(
-            f"{operation}: 벨로그가 결과를 돌려주지 않았습니다. "
-            "토큰이 만료됐을 가능성이 큽니다. `python scripts/login.py` 로 다시 로그인하세요"
+            f"{operation}: 벨로그가 에러 없이 빈 결과를 돌려줬습니다. "
+            "가능한 원인은 토큰 만료, 필수 인자 누락, 벨로그의 일시적 거부입니다. "
+            "잠시 뒤 다시 시도해보고, 계속 실패하면 velog_whoami 로 인증을 확인하세요"
         )
     return result
 

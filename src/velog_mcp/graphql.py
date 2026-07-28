@@ -18,6 +18,16 @@
     mutation removePost(id: ID!): Boolean
     mutation createSeries(name: String!, url_slug: String!): Series
 
+meta 는 반드시 객체({})로 보내야 한다
+    meta 를 빼거나 null 로 보내면 벨로그는 GraphQL 에러 없이 data.writePost = null 만
+    돌려준다. 로그인 상태와 무관하며, 인증 문제로 착각하기 쉽다. 웹 에디터가 보내는
+    요청을 캡처해 비교한 뒤, 변수를 하나씩 바꿔가며 확인했다(2026-07 실측).
+        meta 선언 없음   → null
+        meta: null      → null
+        meta: {}        → 성공
+    token(스팸 방지용으로 보이는 인자)은 웹 에디터도 null 로 보내며, 있으나 없으나
+    결과가 같았다.
+
 스키마는 예고 없이 바뀔 수 있다. 도구가 갑자기 깨지면 이 파일을 가장 먼저 확인한다.
 """
 
@@ -31,6 +41,26 @@ POST_SUMMARY_FIELDS = """
   released_at
   updated_at
   tags
+"""
+
+# 쓰기 뮤테이션 응답에는 short_description 을 요청하지 않는다.
+# 벨로그의 short_description 리졸버는 뮤테이션이 돌려주는 객체에서 본문을 찾지 못해
+# 터진다(errors: Cannot read properties of undefined (reading 'replace')).
+# 글은 실제로 저장되는데 응답만 깨지므로, 쓰지도 않는 필드를 아예 빼는 쪽이 안전하다.
+# 조회 쿼리에서는 정상 동작하므로 POST_SUMMARY_FIELDS 는 그대로 둔다. (2026-07 실측)
+WRITE_RESULT_FIELDS = """
+  id
+  title
+  url_slug
+  thumbnail
+  is_private
+  is_temp
+  released_at
+  updated_at
+  tags
+  user {
+    username
+  }
 """
 
 AUTH_QUERY = """
@@ -100,6 +130,7 @@ mutation VelogMcpWritePost(
   $url_slug: String
   $thumbnail: String
   $series_id: ID
+  $meta: JSON
 ) {{
   writePost(
     title: $title
@@ -111,12 +142,9 @@ mutation VelogMcpWritePost(
     url_slug: $url_slug
     thumbnail: $thumbnail
     series_id: $series_id
+    meta: $meta
   ) {{
-    {POST_SUMMARY_FIELDS}
-    is_temp
-    user {{
-      username
-    }}
+    {WRITE_RESULT_FIELDS}
   }}
 }}
 """
@@ -133,6 +161,7 @@ mutation VelogMcpEditPost(
   $url_slug: String
   $thumbnail: String
   $series_id: ID
+  $meta: JSON
 ) {{
   editPost(
     id: $id
@@ -145,12 +174,9 @@ mutation VelogMcpEditPost(
     url_slug: $url_slug
     thumbnail: $thumbnail
     series_id: $series_id
+    meta: $meta
   ) {{
-    {POST_SUMMARY_FIELDS}
-    is_temp
-    user {{
-      username
-    }}
+    {WRITE_RESULT_FIELDS}
   }}
 }}
 """

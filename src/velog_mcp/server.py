@@ -370,6 +370,9 @@ def _build_payload(
         "series_id": series_id,
         # 본문은 항상 마크다운으로 취급한다.
         "is_markdown": True,
+        # meta 가 객체가 아니면 벨로그가 에러 없이 null 만 돌려준다(2026-07 실측).
+        # 웹 에디터도 항상 {} 를 보낸다. 자세한 내용은 graphql.py 주석 참고.
+        "meta": {},
     }
 
 
