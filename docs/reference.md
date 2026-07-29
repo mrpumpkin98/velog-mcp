@@ -142,10 +142,12 @@ flowchart TD
 | 증상 | 원인과 해결 |
 | --- | --- |
 | 클라이언트에 도구가 안 보임 | 재시작 안 함, 또는 `command`가 시스템 파이썬 |
+| `uvx`를 찾을 수 없다는 오류 | GUI 앱이 쉘 PATH를 못 물려받은 것. `which uvx` 결과를 `command`에 절대 경로로 적으세요 (예: `/opt/homebrew/bin/uvx`) |
+| `playwright`가 없다는 오류 | 설정의 `args`에 `velog-mcp[login]`처럼 `[login]`이 들어갔는지 확인 |
 | "로그인 토큰이 없습니다" | `velog_login` 호출 (또는 `scripts/login.py`) |
 | "토큰이 만료됐거나 잘못되었습니다" | `refresh_token`까지 만료됨 → 다시 로그인 |
 | 쓰기 도구가 인증 오류 | 벨로그가 미인증 쓰기에 `null`만 주므로 인증 오류로 변환된 것 |
-| 브라우저가 안 열림 | `./.venv/bin/python -m playwright install chromium` |
+| 브라우저가 안 열림 | Chromium을 한 번 받아야 합니다: `uvx --from "velog-mcp[login]" playwright install chromium` |
 | `.env`를 고쳤는데 반영 안 됨 | `.env`는 읽지 않음. 클라이언트 설정의 `env`에 넣을 것 |
 | 상대 경로 거부됨 | 파일은 절대 경로로 지정 |
 | 조회할 계정을 모른다는 오류 | 로그인하거나 `username`을 직접 지정 |
