@@ -52,6 +52,51 @@ sequenceDiagram
 
 두 번째부터는 브라우저 프로필(`~/.velog-mcp/browser`)이 남아 있어 사람이 손댈 일이 없고, `headless=True`로 부르면 창도 뜨지 않습니다.
 
+## Connect 버튼은 무엇을 인증하나
+
+Cursor는 **OAuth를 지원하는 MCP 서버에만** 설정 화면에 Connect/Logout 버튼을 그립니다. 그리고 그 OAuth는 **stdio가 아니라 HTTP 트랜스포트에서만** 동작합니다. Cursor 문서의 트랜스포트 표에 `stdio`는 인증이 `Manual`로, SSE·Streamable HTTP만 `OAuth`로 적혀 있습니다.
+
+여기서 헷갈리기 쉬운 게 있습니다. **벨로그는 서드파티용 OAuth 제공자가 없습니다.** 그러니 위임할 상대가 없고, 우리가 직접 인증 서버 역할을 합니다. 그래서 발급되는 토큰은 벨로그 토큰이 아니라 **이 MCP 서버에 접근할 권한**을 뜻하는 자체 토큰입니다. 실제 벨로그 인증은 위에서 설명한 브라우저 쿠키 방식 그대로이고, 그 쿠키는 서버 쪽에만 남습니다.
+
+```
+ Cursor  <--- OAuth (우리가 발급한 토큰) --->  velog-mcp  <--- 쿠키 --->  벨로그
+```
+
+흐름은 이렇습니다.
+
+```mermaid
+sequenceDiagram
+    participant C as Cursor
+    participant S as velog-mcp (HTTP)
+    participant B as Chromium
+    participant V as 벨로그
+
+    C->>S: /mcp (토큰 없음)
+    S-->>C: 401 + WWW-Authenticate (메타데이터 위치)
+    C->>S: /register (자기 redirect_uri 를 알려줌)
+    C->>S: /authorize (PKCE)
+    S-->>C: /velog/login 으로 리다이렉트
+    C->>S: 브라우저로 로그인 화면 열기
+    alt 저장된 토큰이 아직 유효
+        S-->>C: 창 없이 곧바로 code 발급
+    else 로그인 필요
+        S->>B: 벨로그 로그인 창
+        B->>V: 이메일 링크 또는 소셜 OAuth
+        V-->>B: 쿠키
+        B-->>S: 쿠키 추출·저장
+        S-->>C: code 발급
+    end
+    C->>S: /token (code + PKCE 검증)
+    S-->>C: access_token · refresh_token
+    C->>S: /mcp (Bearer 토큰)
+```
+
+**리다이렉트 URL을 하드코딩하지 않았습니다.** Cursor가 쓰는 콜백 주소는 문서와 실제 보고가 어긋납니다(문서는 `http://localhost:8787/callback`, 포럼에는 `cursor://...`). 동적 클라이언트 등록(DCR)을 켜두면 Cursor가 등록할 때 자기 `redirect_uris`를 알려주므로, 우리가 그 값을 알 필요가 없어집니다.
+
+등록된 클라이언트와 발급한 토큰은 `~/.velog-mcp/oauth-*.json`에 남깁니다. 메모리에만 두면 **서버를 재시작할 때마다 Cursor가 로그아웃 상태로 돌아갑니다.**
+
+트레이드오프가 분명합니다. stdio는 Cursor가 프로세스를 대신 띄워주는데, HTTP 모드는 **직접 켜둬야 합니다.** 버튼 하나와 프로세스 관리를 맞바꾸는 셈이라, 기본값은 여전히 stdio입니다. 그리고 이 서버는 루프백에만 바인딩합니다. 외부에 열면 남의 벨로그 쿠키를 대신 보관하는 서버가 됩니다.
+
 ## 토큰이 관리되는 방식
 
 인증은 `access_token`·`refresh_token` 쿠키로 합니다. `access_token`이 만료되면 벨로그가 `refresh_token`을 보고 새 토큰을 `Set-Cookie`로 내려주는데, 서버는 응답 헤더에서 그것을 붙잡아 저장소에 반영합니다. 그래서 평소에는 아무것도 하지 않아도 갱신됩니다.
@@ -160,6 +205,8 @@ flowchart TD
     login["browser_login.py<br/>브라우저 로그인"]
     config["config.py<br/>환경변수 + 저장소 병합"]
     store["token_store.py<br/>원자적 쓰기 0600"]
+    http["http_app.py<br/>HTTP 모드 · 로그인 콜백"]
+    oauth["oauth.py<br/>OAuth 인증 서버 · DCR"]
 
     server --> markdown
     server --> client
@@ -169,7 +216,12 @@ flowchart TD
     client --> store
     config --> store
     login --> store
+    http --> oauth
+    http --> login
+    http --> server
 ```
+
+`http_app.py`와 `oauth.py`는 **HTTP 모드에서만** 쓰입니다. 기본값인 stdio 경로는 이 둘을 임포트조차 하지 않습니다.
 
 `scripts/` 아래에는 설치 점검(`doctor.py`), 터미널 로그인(`login.py`), 그리고 글을 만들지 않는 검증 스크립트 4개가 있습니다. 자세한 목록은 [레퍼런스](reference.md#스크립트)에 있습니다.
 

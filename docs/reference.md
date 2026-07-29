@@ -117,6 +117,11 @@ Playwright를 쓰지 않겠다면 브라우저 개발자도구 → Application �
 
 # 클라이언트 설정 그대로 띄워 연결 검증
 ./.venv/bin/python scripts/verify_mcp_config.py
+
+# HTTP 모드를 쓸 때만 필요: 로그인 시 자동 시작 등록 (macOS)
+./.venv/bin/python scripts/install_launch_agent.py            # 등록 + 즉시 시작
+./.venv/bin/python scripts/install_launch_agent.py --status    # 상태 확인
+./.venv/bin/python scripts/install_launch_agent.py --uninstall # 해제
 ```
 
 ## 문제 해결

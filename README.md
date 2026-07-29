@@ -61,6 +61,41 @@ python3 -m venv .venv
 
 > 내 벨로그 글 목록 보여줘
 
+<details>
+<summary><b>대화 대신 Connect 버튼으로 로그인하기 (선택)</b></summary>
+
+Cursor 설정 화면의 MCP 목록에서 **Connect** 버튼을 눌러 로그인하고 싶다면 HTTP 모드로 띄웁니다. Cursor는 OAuth를 지원하는 서버에만 그 버튼을 그리고, OAuth는 stdio가 아니라 HTTP 트랜스포트에서만 동작합니다.
+
+```bash
+python -m velog_mcp --http          # 127.0.0.1:8790
+```
+
+설정에는 `command` 대신 `url`을 적습니다.
+
+```json
+{
+  "mcpServers": {
+    "velog": { "url": "http://127.0.0.1:8790/mcp" }
+  }
+}
+```
+
+이제 Connect를 누르면 브라우저가 열려 벨로그 로그인이 진행되고, 끝나면 버튼이 Logout으로 바뀝니다. 한 번 로그인해두면 서버를 재시작해도 연결이 유지되고, 두 번째부터는 창이 뜨지 않고 즉시 연결됩니다.
+
+**대신 이걸 감수해야 합니다.** stdio 모드는 Cursor가 서버를 알아서 띄워주지만, HTTP 모드는 **프로세스를 직접 켜둬야 합니다.** 꺼져 있으면 도구가 보이지 않습니다.
+
+macOS라면 이 부담을 없앨 수 있습니다.
+
+```bash
+python scripts/install_launch_agent.py
+```
+
+로그인할 때 자동으로 뜨고, 어떤 이유로 죽어도 launchd가 다시 띄웁니다. 상태는 `--status`, 해제는 `--uninstall`로 봅니다. 로그는 `~/.velog-mcp/http.log`에 쌓입니다.
+
+여기서 발급되는 OAuth 토큰은 벨로그 토큰이 아니라 **이 서버에 접근할 권한**을 뜻하는 자체 토큰입니다. 벨로그 쿠키는 예전과 같이 `~/.velog-mcp/`에만 남습니다. 서버는 루프백(`127.0.0.1`)에만 바인딩되니 **외부에 노출하지 마세요.** 남의 계정 쿠키를 대신 들고 있는 서버가 됩니다.
+
+</details>
+
 ### 4. 글 올리기
 
 문서 맨 위에 프런트매터를 답니다. `draft: true`가 안전장치입니다.

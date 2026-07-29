@@ -165,6 +165,19 @@ def check_client_registration() -> None:
         next_steps.append("클라이언트를 완전히 종료한 뒤 다시 켜세요 (시작할 때만 서버를 읽습니다)")
         return
 
+    # HTTP 모드로 등록한 경우. 이때는 Cursor 가 서버를 띄워주지 않으므로
+    # 경로가 아니라 '켜져 있는지'가 관심사다.
+    if entry.get("url") and not entry.get("command"):
+        url = entry["url"]
+        if _http_server_alive(url):
+            check(OK, REG_LABEL, f"HTTP 모드, 응답 있음 ({url})")
+        else:
+            check(WARN, REG_LABEL, f"HTTP 모드인데 응답이 없음 ({url})")
+            next_steps.append(
+                "HTTP 모드는 서버를 직접 켜둬야 합니다: python -m velog_mcp --http"
+            )
+        return
+
     command = entry.get("command", "")
     if not Path(command).exists():
         check(NO, REG_LABEL, f"command 경로가 존재하지 않음: {command}")
@@ -183,6 +196,26 @@ def check_client_registration() -> None:
     check(OK, REG_LABEL, command)
 
 
+def _http_server_alive(url: str) -> bool:
+    """HTTP 모드 서버가 떠 있는지 본다.
+
+    인증이 걸려 있어 200 이 아니라 401 이 정상이다. '응답이 온다'는 것만 확인한다.
+    """
+    from urllib.error import HTTPError, URLError
+    from urllib.parse import urlparse
+    from urllib.request import urlopen
+
+    parsed = urlparse(url)
+    probe = f"{parsed.scheme}://{parsed.netloc}/.well-known/oauth-authorization-server"
+    try:
+        with urlopen(probe, timeout=3) as response:
+            return response.status < 500
+    except HTTPError:
+        return True  # 응답은 온 것이니 서버는 살아 있다
+    except (URLError, OSError):
+        return False
+
+
 def print_snippet() -> None:
     interpreter = ROOT / ".venv" / "bin" / "python"
     snippet = {
@@ -197,6 +230,12 @@ def print_snippet() -> None:
     print(f"\n  Cursor          : {CURSOR_CONFIG}")
     print("  Claude Desktop  : ~/Library/Application Support/Claude/claude_desktop_config.json")
     print("\n(이미 다른 서버가 있다면 mcpServers 안에 velog 항목만 추가하세요)")
+    print(
+        "\n설정 화면의 Connect 버튼으로 로그인하려면 HTTP 모드를 쓰세요.\n"
+        "  python -m velog_mcp --http\n"
+        '  설정에는 command 대신: { "velog": { "url": "http://127.0.0.1:8790/mcp" } }\n'
+        "  (대신 서버를 직접 켜둬야 합니다. 자세한 내용은 README)"
+    )
 
 
 def main() -> int:
