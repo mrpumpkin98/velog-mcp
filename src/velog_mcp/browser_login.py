@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 from pathlib import Path
 
 LOGIN_URL = "https://velog.io/?to=%2F"
@@ -27,6 +28,39 @@ class BrowserLoginError(RuntimeError):
 
 class PlaywrightMissingError(BrowserLoginError):
     """playwright 패키지 또는 Chromium 이 없음."""
+
+
+def _installed_via_uv() -> bool:
+    """uvx 나 uv tool 로 설치돼 실행 중인지 본다.
+
+    uvx 는 임시 환경에서 돌기 때문에 경로가 uv 캐시 안에 있다.
+        uvx        -> ~/.cache/uv/archive-v0/XXXX
+        uv tool    -> ~/.local/share/uv/tools/XXXX
+    """
+    prefix = str(Path(sys.prefix).resolve())
+    return "/uv/archive-" in prefix or "/uv/tools/" in prefix
+
+
+def chromium_install_hint() -> str:
+    """설치 방식에 맞는 Chromium 설치 명령.
+
+    uvx 로 쓰는 사람에게 `python -m playwright install` 을 알려주면 소용없다.
+    그 사람에게는 venv 도 pip 도 없어서 그대로 따라 해도 실패한다.
+    """
+    if _installed_via_uv():
+        return 'uvx --from "velog-mcp[login]" playwright install chromium'
+    return f"{sys.executable} -m playwright install chromium"
+
+
+def _playwright_missing_hint() -> str:
+    """playwright 패키지 자체가 없을 때의 안내."""
+    if _installed_via_uv():
+        return (
+            "MCP 설정의 args 에 [login] 이 들어가야 합니다:\n"
+            '  "args": ["--from", "velog-mcp[login]", "velog-mcp"]\n'
+            "고친 뒤 클라이언트를 재시작하세요."
+        )
+    return f"  pip install 'velog-mcp[login]'\n  {chromium_install_hint()}"
 
 
 def profile_dir() -> Path:
@@ -54,9 +88,7 @@ async def extract_tokens(
         from playwright.async_api import async_playwright
     except ImportError as exc:
         raise PlaywrightMissingError(
-            "playwright 가 설치되지 않았습니다. 다음을 실행하세요:\n"
-            "  pip install 'velog-mcp[login]'\n"
-            "  python -m playwright install chromium"
+            f"브라우저 로그인에 필요한 playwright 가 없습니다.\n{_playwright_missing_hint()}"
         ) from exc
 
     profile = profile_dir()
@@ -72,7 +104,7 @@ async def extract_tokens(
         except Exception as exc:
             raise PlaywrightMissingError(
                 f"Chromium 을 실행할 수 없습니다: {exc}\n"
-                "브라우저가 없다면: python -m playwright install chromium"
+                f"브라우저가 없다면 한 번만 받으면 됩니다: {chromium_install_hint()}"
             ) from exc
 
         try:

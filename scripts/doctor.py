@@ -174,7 +174,7 @@ def check_client_registration() -> None:
         else:
             check(WARN, REG_LABEL, f"HTTP 모드인데 응답이 없음 ({url})")
             next_steps.append(
-                "HTTP 모드는 서버를 직접 켜둬야 합니다: python -m velog_mcp --http"
+                f"HTTP 모드는 서버를 직접 켜둬야 합니다: {_interpreter()} -m velog_mcp --http"
             )
         return
 
@@ -216,8 +216,12 @@ def _http_server_alive(url: str) -> bool:
         return False
 
 
+def _interpreter() -> Path:
+    return ROOT / ".venv" / "bin" / "python"
+
+
 def print_snippet() -> None:
-    interpreter = ROOT / ".venv" / "bin" / "python"
+    interpreter = _interpreter()
     snippet = {
         "mcpServers": {
             "velog": {"command": str(interpreter), "args": ["-m", "velog_mcp"]}
@@ -231,8 +235,12 @@ def print_snippet() -> None:
     print("  Claude Desktop  : ~/Library/Application Support/Claude/claude_desktop_config.json")
     print("\n(이미 다른 서버가 있다면 mcpServers 안에 velog 항목만 추가하세요)")
     print(
+        "\n내려받지 않고 쓰는 방법도 있습니다 (남에게 권할 때):\n"
+        '  { "velog": { "command": "uvx", "args": ["--from", "velog-mcp[login]", "velog-mcp"] } }'
+    )
+    print(
         "\n설정 화면의 Connect 버튼으로 로그인하려면 HTTP 모드를 쓰세요.\n"
-        "  python -m velog_mcp --http\n"
+        f"  {interpreter} -m velog_mcp --http\n"
         '  설정에는 command 대신: { "velog": { "url": "http://127.0.0.1:8790/mcp" } }\n'
         "  (대신 서버를 직접 켜둬야 합니다. 자세한 내용은 README)"
     )

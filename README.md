@@ -12,31 +12,24 @@
 
 ## 시작하기
 
-### 1. 설치
+내려받거나 가상환경을 만들 일이 없습니다. 설정에 세 줄 넣고 로그인 한 번이면 끝입니다.
+
+### 1. uv 설치 (한 번만)
+
+패키지를 받아 실행해주는 도구입니다. Node의 `npx`에 해당하고, 다른 파이썬 MCP에도 그대로 씁니다.
 
 ```bash
-git clone https://github.com/mrpumpkin98/velog-mcp.git
-cd velog-mcp
-
-python3 -m venv .venv
-./.venv/bin/python -m pip install -e ".[login]"
-./.venv/bin/python -m playwright install chromium   # 로그인 창용, 1회
-
-./.venv/bin/python scripts/doctor.py                # 점검 + 등록용 JSON 출력
+curl -LsSf https://astral.sh/uv/install.sh | sh   # 또는: brew install uv
 ```
 
-`doctor.py`가 지금 무엇이 빠졌는지와 다음에 할 일을 알려줍니다. **막히면 항상 이걸 먼저 실행하세요.**
-
 ### 2. 클라이언트에 등록
-
-`doctor.py`가 **본인 경로로 채워서** 출력한 JSON을 설정 파일에 붙여넣습니다.
 
 ```json
 {
   "mcpServers": {
     "velog": {
-      "command": "/absolute/path/to/velog-mcp/.venv/bin/python",
-      "args": ["-m", "velog_mcp"]
+      "command": "uvx",
+      "args": ["--from", "velog-mcp[login]", "velog-mcp"]
     }
   }
 }
@@ -47,7 +40,9 @@ python3 -m venv .venv
 | Cursor | `~/.cursor/mcp.json` |
 | Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 
-토큰도 계정명도 적지 않습니다. `command`는 반드시 **가상환경 파이썬의 절대 경로**여야 합니다. 시스템 파이썬(`/usr/bin/python3`)을 적으면 패키지가 없어 서버가 뜨지 않습니다.
+경로도, 토큰도, 계정명도 적지 않습니다. 어느 컴퓨터에서든 이 세 줄이 같습니다.
+
+`[login]`은 브라우저 로그인에 필요합니다. 토큰을 직접 넣어 쓸 거라면 빼도 됩니다 — [토큰을 직접 넣기](https://github.com/mrpumpkin98/velog-mcp/blob/main/docs/reference.md#토큰을-직접-넣기)
 
 ### 3. 재시작하고 로그인
 
@@ -67,7 +62,7 @@ python3 -m venv .venv
 Cursor 설정 화면의 MCP 목록에서 **Connect** 버튼을 눌러 로그인하고 싶다면 HTTP 모드로 띄웁니다. Cursor는 OAuth를 지원하는 서버에만 그 버튼을 그리고, OAuth는 stdio가 아니라 HTTP 트랜스포트에서만 동작합니다.
 
 ```bash
-python -m velog_mcp --http          # 127.0.0.1:8790
+uvx --from "velog-mcp[login]" velog-mcp --http      # 127.0.0.1:8790
 ```
 
 설정에는 `command` 대신 `url`을 적습니다.
@@ -84,10 +79,10 @@ python -m velog_mcp --http          # 127.0.0.1:8790
 
 **대신 이걸 감수해야 합니다.** stdio 모드는 Cursor가 서버를 알아서 띄워주지만, HTTP 모드는 **프로세스를 직접 켜둬야 합니다.** 꺼져 있으면 도구가 보이지 않습니다.
 
-macOS라면 이 부담을 없앨 수 있습니다.
+macOS라면 이 부담을 없앨 수 있습니다. 다만 자동 시작 스크립트는 저장소에 있어서, **아래 [직접 내려받아 쓰기](#직접-내려받아-쓰기)로 설치한 경우에만** 쓸 수 있습니다.
 
 ```bash
-python scripts/install_launch_agent.py
+./.venv/bin/python scripts/install_launch_agent.py
 ```
 
 로그인할 때 자동으로 뜨고, 어떤 이유로 죽어도 launchd가 다시 띄웁니다. 상태는 `--status`, 해제는 `--uninstall`로 봅니다. 로그는 `~/.velog-mcp/http.log`에 쌓입니다.
@@ -157,19 +152,53 @@ velog_url: https://velog.io/@your-id/transaction-boundary
 - **첫 발행은 임시저장으로.** 코드블록·표가 의도대로 나오는지 보고 공개하세요.
 - **자기 계정, 자기 글에만 쓰세요.** 대량 발행이나 자동 생성 글 양산에 쓰지 마세요. 벨로그는 개인이 운영비를 대는 서비스입니다. 호출도 사람이 글을 쓰는 속도를 넘지 않게 해주세요.
 
-문제가 생기면 `scripts/doctor.py` → [문제 해결](docs/reference.md#문제-해결) 순서로 보세요.
+문제가 생기면 [문제 해결](https://github.com/mrpumpkin98/velog-mcp/blob/main/docs/reference.md#문제-해결)을 보세요.
+
+---
+
+## 직접 내려받아 쓰기
+
+코드를 고치거나 기여할 때, 또는 `uvx` 없이 쓰고 싶을 때입니다.
+
+```bash
+git clone https://github.com/mrpumpkin98/velog-mcp.git
+cd velog-mcp
+
+python3 -m venv .venv
+./.venv/bin/python -m pip install -e ".[login]"
+./.venv/bin/python -m playwright install chromium   # 로그인 창용, 1회
+
+./.venv/bin/python scripts/doctor.py                # 점검 + 등록용 JSON 출력
+```
+
+`doctor.py`가 무엇이 빠졌는지와 다음에 할 일을 알려주고, 본인 경로로 채운 설정 JSON까지 출력합니다. **막히면 이걸 먼저 실행하세요.**
+
+이 방식으로 등록할 때는 `command`에 **가상환경 파이썬의 절대 경로**를 적습니다. 시스템 파이썬(`/usr/bin/python3`)을 적으면 패키지가 없어 서버가 뜨지 않습니다.
+
+```json
+{
+  "mcpServers": {
+    "velog": {
+      "command": "/absolute/path/to/velog-mcp/.venv/bin/python",
+      "args": ["-m", "velog_mcp"]
+    }
+  }
+}
+```
+
+검증 스크립트 목록은 [레퍼런스](https://github.com/mrpumpkin98/velog-mcp/blob/main/docs/reference.md#스크립트)에 있습니다.
 
 ---
 
 ## 더 보기
 
-- **[레퍼런스](docs/reference.md)** — 프런트매터·환경변수 전체 목록, 검증 스크립트, 문제 해결
-- **[동작 방식](docs/how-it-works.md)** — 인증을 이렇게 만든 이유, 토큰 자동 갱신, 스키마를 알아낸 방법, 코드 구조
+- **[레퍼런스](https://github.com/mrpumpkin98/velog-mcp/blob/main/docs/reference.md)** — 프런트매터·환경변수 전체 목록, 검증 스크립트, 문제 해결
+- **[동작 방식](https://github.com/mrpumpkin98/velog-mcp/blob/main/docs/how-it-works.md)** — 인증을 이렇게 만든 이유, 토큰 자동 갱신, 스키마를 알아낸 방법, 코드 구조
 
 ## 라이선스와 고지
 
-이 프로젝트는 MIT 라이선스입니다 — [LICENSE](LICENSE).
+이 프로젝트는 MIT 라이선스입니다 — [LICENSE](https://github.com/mrpumpkin98/velog-mcp/blob/main/LICENSE).
 
 **벨로그와 아무 관계가 없습니다.** 벨로그 운영사의 제휴·후원·승인·지원을 받지 않은 개인 프로젝트이며, 문제가 생겨도 벨로그에 문의하지 마세요. `velog`·`벨로그`는 각 권리자의 상표이고, 이 프로젝트는 어떤 도구인지 가리키기 위해 이름을 쓸 뿐입니다. 권리자가 요청하면 이름을 바꾸겠습니다.
 
-벨로그 본체도 MIT 오픈소스입니다([velog-io/velog](https://github.com/velog-io/velog)). 이 서버가 호출하는 쓰기 스키마도 그 저장소에 공개돼 있습니다 — [스키마를 어떻게 알아냈나](docs/how-it-works.md#스키마를-어떻게-알아냈나)
+벨로그 본체도 MIT 오픈소스입니다([velog-io/velog](https://github.com/velog-io/velog)). 이 서버가 호출하는 쓰기 스키마도 그 저장소에 공개돼 있습니다 — [스키마를 어떻게 알아냈나](https://github.com/mrpumpkin98/velog-mcp/blob/main/docs/how-it-works.md#스키마를-어떻게-알아냈나)
